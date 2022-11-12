@@ -1,0 +1,2 @@
+class FinanceFetcher:
+    pass
