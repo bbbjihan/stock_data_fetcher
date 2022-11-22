@@ -98,6 +98,11 @@ def get_today() -> date:
     return datetime.now(tz=TZ_KST).date()
 
 
+def get_datetime_strfmt() -> datetime:
+    TZ_KST = timezone(timedelta(hours=9), "KST")
+    return datetime.now(tz=TZ_KST).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def date_logging(from_: date, to_: date, now_, market):
     print(
         f"{market} | starting From {from_.strftime('%Y-%m-%d')} ... to {to_.strftime('%Y-%m-%d')} | {now_}"
