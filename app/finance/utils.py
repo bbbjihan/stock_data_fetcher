@@ -34,12 +34,17 @@ class URL_ENDPOINT:
             "API_TYPE": "MDCSTAT01701",
             "typical": "share=1&money=1&adjStkPrc_check=Y&adjStkPrc=2",
         },
+        "single_buyer": {
+            "API_TYPE": "MDCSTAT02301",
+            "typical": "inqTpCd=1&trdVolVal=2&askBid=3&share=1&money=1",
+        },
     }
+
     _MARKET_TYPE: ClassVar[str] = "mktId={}"  # STK, KSQ, KNX
     _START_DATE: ClassVar[str] = "strtDd={}"  # 20221014 - program, buyer
     _END_DATE: ClassVar[str] = "endDd={}"  # 20221014 - program, buyer
     _TRADE_DATE: ClassVar[str] = "trdDd={}"  # 20221014 - stock
-    _STOCK_CODE: ClassVar[str] = "isuCd={}"  # KR7005930003 - single_sise
+    _STOCK_CODE: ClassVar[str] = "isuCd={}"  # KR7005930003 - single_sise, single_buyer
 
     for_: str  # program, stockInfo, buyer, basic_info
 
@@ -55,8 +60,8 @@ class URL_ENDPOINT:
         """
         Args:
             market_type (str): STK, KSQ, KNX
-            start_date (str, optional): 2022-10-26 -> "20221026" - program, buyer, single_sise
-            end_date (str, optional): 2022-10-26 -> "20221026" - program, buyer, single_sise
+            start_date (str, optional): 2022-10-26 -> "20221026" - program, buyer, single_sise, single_buyer
+            end_date (str, optional): 2022-10-26 -> "20221026" - program, buyer, single_sise, single_buyer
             trade_date (str, optional): 2022-10-26 -> "20221026" - stock
             isuCd (str) : "KR7005930003" - single_sise ISU_CD(필수)
         Returns:
