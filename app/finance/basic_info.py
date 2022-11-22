@@ -14,14 +14,12 @@ from utils import (
     get_today,
 )
 import os, csv
-import os, csv
 import json
-
+from pprint import pprint
 from abc import *
 from typing import Coroutine, List, ClassVar, Any, Generator
 import aiohttp
 import asyncio
-import csv
 import asyncmy
 
 # from finance.abstractClass import KRX_data_interface
@@ -235,8 +233,17 @@ class BasicInfoClass(KRX_data_interface):
             SUMMARY, 
             STATE_CODE) VALUES (%s, %s,%s, %s,%s, %s,%s, %s,%s, %s,%s, %s)
         """
-        async with conn.cursor() as curr:
-            await curr.executemany(insert_query, data_)
+        # async with conn.cursor() as curr:
+        #     await curr.executemany(insert_query, data_)
+        try:
+            async with conn.cursor() as curr:
+                await curr.executemany(insert_query, data_)
+        except Exception as e:
+            pprint(data_)
+            print(e)
+            exit()
+        finally:
+            conn.close()
 
     async def run_routine(self) -> None:
         for market in MARKETS.ALL:
