@@ -1,18 +1,39 @@
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi_utils.tasks import repeat_every
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from finance import *
 
 from datetime import timezone, timedelta
 from functools import partial
+from routers.stock import by_name, by_stat
+from routers.stock import general
 
 logger = logging.getLogger(__name__)
-app = FastAPI()
 
 
+def build_app():
+    app = FastAPI()
+    app.include_router(by_name.router)
+    app.include_router(by_stat.router)
+    app.include_router(general.router)
+
+    return app
+
+
+app = build_app()
+
+
+# @app.websocket("/ws")
+# async def websocket_temp(websocket: WebSocket):
+#     await websocket.accept()
+#     while True:
+#         data = await websocket.receive_text()
+#         await websocket.send_text(f"Message text was: {data}")
+
+
+"""
 def build_scheduler() -> AsyncIOScheduler:
 
     TZ_KST = timezone(timedelta(hours=9), "KST")
@@ -21,7 +42,10 @@ def build_scheduler() -> AsyncIOScheduler:
     basicInfo = partial(BasicInfoClass().run, MARKETS.ALL)
     cronTrigger = CronTrigger(minute=1, timezone=TZ_KST)
     ii = IntervalTrigger(seconds=5)
-    aioScheduler.add_job(func=basicInfo, trigger=ii)
+    # aioScheduler.add_job(func=basicInfo, trigger=ii)
+    # aioScheduler.add_job(func=basicInfo, trigger=ii)
+    # aioScheduler.add_job(func=basicInfo, trigger=ii)
+    # aioScheduler.add_job(func=basicInfo, trigger=ii)
 
     def temp():
         print("안녕~~")
@@ -30,7 +54,8 @@ def build_scheduler() -> AsyncIOScheduler:
     aioScheduler.add_job(func=temp, trigger=ii)
     # BuyerClass()
     # ProgramClass()
-    # SingelSiseClass()
+    singelSise = SingelSiseClass()
+    # aioScheduler.add_job(func=partial(singelSise.run, ["KR7005930003"]), trigger=ii)
     # StockInfoClass()
 
     # aioScheduler.add_job()
@@ -40,16 +65,23 @@ def build_scheduler() -> AsyncIOScheduler:
 
 app.scheduler = build_scheduler()
 app.scheduler.start()
+"""
+
+
+@app.on_event("startup")
+async def startup():
+    from database.setup import setup
+
+    await setup()
+
+    print("finished setup")
+
+
+@app.on_event("shutdown")
+async def startup():
+    pass
 
 
 @app.get("/")
 def hello():
     return "Hello"
-
-
-# @app.on_event("startup")
-# # @repeat_every(seconds=1, logger=logger, wait_first=True)
-# def periodic():
-#     global counter
-#     print("counter is", counter)
-#     counter += 1
