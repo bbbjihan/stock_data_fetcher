@@ -258,3 +258,41 @@ async def in_seq_date_between(
             )
     items["ISU_CODE"] = isu_codes
     return items
+
+
+@router.get("/top/trade")
+async def get_top_trades(tp: str, db: Session = Depends(get_db)):
+    """
+    거래량/거래금액 상위 종목들
+
+    """
+    date_ = "2022-11-22"
+    sort_by = "TRADE_VOLUME"
+    get_num = 20
+    query = f"""
+    SELECT * FROM finance.Stock_Day_Summary
+    WHERE TRADE_DATE='{date_}'
+    order by {sort_by} DESC
+    limit {get_num}
+    """
+    print(f"{tp=}")
+    return
+
+
+@router.get("/top/fluc")
+async def get_top_trades(tp: str, db: Session = Depends(get_db)):
+    """
+    상승/하락 상위 종목들
+
+    """
+    date_ = "2022-11-22"
+    sort_by = "COMPARED_PREV_RATE"
+    get_num = 20
+    query = f"""
+    SELECT * FROM finance.Stock_Day_Summary
+    WHERE TRADE_DATE='{date_}'
+    order by {sort_by} DESC
+    limit {get_num}
+    """
+    print(f"{tp=}")
+    return
