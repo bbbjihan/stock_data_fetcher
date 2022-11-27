@@ -1,5 +1,5 @@
 import logging
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, middleware
 from fastapi_utils.tasks import repeat_every
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -9,6 +9,8 @@ from datetime import timezone, timedelta
 from functools import partial
 from routers.stock import by_name, by_stat
 from routers.stock import general
+from routers.user import login, register, update
+from middlewares.token_validator import access_control
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +20,23 @@ def build_app():
     app.include_router(by_name.router)
     app.include_router(by_stat.router)
     app.include_router(general.router)
+    app.include_router(login.router)
+    app.include_router(register.router)
+    app.include_router(update.router)
 
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.middleware.cors import CORSMiddleware
+
+    app.add_middleware(middleware_class=BaseHTTPMiddleware, dispatch=access_control)
     return app
 
 
 app = build_app()
+
+
+@app.get("/test")
+async def test():
+    return 200
 
 
 # @app.websocket("/ws")
