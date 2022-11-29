@@ -5,7 +5,6 @@ from fastapi import (
     Query,
     WebSocket,
     Body,
-    HTTPException,
     Response,
     Request,
 )
@@ -22,6 +21,14 @@ import re
 import hashlib
 from uuid import uuid4
 from datetime import date, datetime
+
+from exceptions.userInfo import (
+    EmailAlreadyExists,
+    EmailFormatNotValid,
+    TooYoung,
+    UsernameAlreadyExists,
+    UsernameAgainstPolicy,
+)
 
 __all__ = ["router"]
 
@@ -92,9 +99,7 @@ async def register(userRegisterFrom: UserRegisterFrom, db: Session = Depends(get
     회원 가입하는 엔드포인트
     """
     if not userRegisterFrom.valid_age:
-        raise HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE, detail="18세 미만은 가입이 불가능합니다 애송이"
-        )
+        raise TooYoung
 
     # print(userRegisterFrom)
     # return 200
@@ -135,7 +140,7 @@ async def check_usable_username(able: str, db: Session = Depends(get_db)):
     # 1. 닉네임 정책
     is_able, msg = matches_username_policy(able)
     if not is_able:
-        raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=msg)
+        raise UsernameAgainstPolicy(detail=msg)
 
     # 2. 닉네임 중복 여부 검사
     query = f"""
@@ -145,9 +150,7 @@ async def check_usable_username(able: str, db: Session = Depends(get_db)):
     """
     a = db.execute(query).fetchone()
     if a:
-        raise HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=f"{able} 닉네임은 이미 사용중입니다."
-        )
+        raise UsernameAlreadyExists
 
     return Response(content=able, status_code=status.HTTP_202_ACCEPTED)
 
@@ -161,9 +164,7 @@ async def check_usable_email(able: str, db: Session = Depends(get_db)):
     try:
         EmailStr.validate(able)
     except EmailError as ee:
-        raise HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=f"{able}는 옳바른 이메일 형식이 아닙니다"
-        )
+        raise EmailFormatNotValid
 
     # 2. 이메일 중복 여부 검사
     query = f"""
@@ -173,5 +174,5 @@ async def check_usable_email(able: str, db: Session = Depends(get_db)):
     """
     a = db.execute(query).fetchone()
     if a:
-        raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=f"이미 사용중인 이메일입니다")
+        raise EmailAlreadyExists
     return status.HTTP_200_OK
