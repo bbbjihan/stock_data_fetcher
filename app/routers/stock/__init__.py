@@ -6,8 +6,9 @@ from routers.stock import info
 
 
 def make_router():
-    router = APIRouter(prefix="/stock", tags=["stock stuffs"])
+    router = APIRouter(prefix="/stock", tags=["stock 주식 정보"])
     router.include_router(search.router)
+    router.include_router(info.router)
     return router
 
 
