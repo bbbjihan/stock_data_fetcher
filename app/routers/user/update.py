@@ -22,6 +22,7 @@ import re
 import hashlib
 from uuid import uuid4
 from datetime import date
+from exceptions.userInformation import *
 
 __all__ = ["router"]
 
@@ -92,10 +93,10 @@ async def udpate_user_info(userUpdateForm: UserUpdateForm, db: Session = Depends
     회원 가입하는 엔드포인트
     이 요청은 이미 해당 ID로 로그인 한 사람이 보낼 수 있음
     """
-    print(userUpdateForm)
+    # print(userUpdateForm)
     # 0. 데이터부터 잘 보냈는지 검사
     if not userUpdateForm.is_valid_request:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="옳바르지 않은 형식입니다")
+        raise TooYoung()
 
     # 1. 본인 검증용 비밀번호 검사
     queryy = f"""
@@ -106,16 +107,14 @@ async def udpate_user_info(userUpdateForm: UserUpdateForm, db: Session = Depends
         HASHED_PW='{userUpdateForm.hased_pw}'
     """
     a = db.execute(queryy).fetchone()
-    # print(f"OLD : {a}")
+
     if not a:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="비밀번호가 일치하지 않습니다")
     USER_NAME, EMAIL, USER_CONTROL_ID, FIRST_NAME, LAST_NAME, BIRTHDAY = a
 
     # 2. 생일 변경시 나이 확인 -> 이거는 솔직히 프론트 상으로 미리 해야하긴함 ㅋㅋ;
     if not userUpdateForm.new.valid_age:
-        raise HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE, detail="18세 미만이 될 수 없습니다 애송이"
-        )
+        raise TooYoung()
 
     # 3. 업데이트 - ! 닉네임 중복 있을 경우 알리기
 
