@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Query, WebSocket, Body
+from fastapi import APIRouter, Depends, status, Query, WebSocket, Body, Path
 
 from sqlalchemy.orm import Session
 from urllib import parse
@@ -6,11 +6,12 @@ from pprint import pprint
 from routers.dep import get_db
 from typing import Optional, List, Union, Any
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
+from utils.regex import only_KOR_chosung, only_KOR_char, only_NUM, is_ISU_CODE
+from exceptions.urlParams import NotEnoughQueryParams
 
 __all__ = ["router", "websocket_endpoint"]
 
 router = APIRouter(prefix="/search")
-# websocketRouter = WebSocket("/search/ws")
 from enum import Enum
 
 
@@ -27,7 +28,7 @@ class STOCK_STATE_CODE(Enum):
 
 class SearchQueryParams(BaseModel):
     keyword: Optional[str]
-    stock_code: Optional[str]
+    market: Optional[MARKET_TYPE]
 
 
 class SearchQueryResult(BaseModel):
@@ -64,29 +65,40 @@ class SearchStatParams(BaseModel):
     days: Optional[PositiveInt]
 
 
-@router.get("/name", response_model=SearchQueryResponse)
-async def search_by(searchParams: SearchQueryParams = Depends(), db: Session = Depends(get_db)):
+@router.get("", response_model=SearchQueryResponse)
+async def search_by_keyword_or_code(
+    searchParams: SearchQueryParams = Body(), db: Session = Depends(get_db)
+):
     """
     주식 이름 검색하는 API
     1. 주식 코드 ISU_CODE, ISU_CODE_KR 으로 검색하는 조건
     2. 주식 전체 이름, 축약 이름(일반적으로 부르는거) ISU_NAME, ISU_NAME_SHORT 으로 검색하는 조건
     """
+    if not searchParams.dict(exclude_none=True):
+        raise NotEnoughQueryParams
+
+    where_clause = optimize_searching(searchParams.keyword)
+
+    if mrkt := searchParams.market:
+        MARKET_TYPE.KONEX == mrkt
+
     queryy = f"""
-    SELECT 
-        ISU_CODE, ISU_CODE_KR,ISU_NAME, ISU_NAME_SHORT, MARKET_TYPE_NAME, STATE_CODE
-    FROM 
-        finance.Stock_Info
-    WHERE 
-        ISU_NAME LIKE '%{searchParams.keyword}%' OR 
-        ISU_NAME_SHORT LIKE '%{searchParams.keyword}%'
+    SELECT ISU_CODE, ISU_CODE_KR,ISU_NAME, ISU_NAME_SHORT, MARKET_TYPE_NAME, STATE_CODE
+    FROM finance.Stock_Info
+    WHERE {where_clause}
     """
+    if not where_clause:
+        # 말도 안되는거 검색하면 쿼리 안하고 끝내기
+        return SearchQueryResponse(asked=searchParams, result=[])
     searchResults = db.execute(queryy).fetchall()
     searchResults = [SearchQueryResult(**x) for x in searchResults]
     return SearchQueryResponse(asked=searchParams, result=searchResults)
 
 
 @router.websocket("/name/ws")
-async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(get_db)) -> None:
+async def search_by_keyword_or_code_websocket(
+    websocket: WebSocket, db: Session = Depends(get_db)
+) -> None:
     """
     WS에서 유니코드로 보냄
     JS 웹 콘솔 상에서 JSON.parse(a)으로 받으면 정상적으로 사용가능
@@ -107,44 +119,6 @@ async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(get_db)
         sqp = SearchQueryParams(keyword=searchParam, stock_code=None)
         sqr = SearchQueryResponse(asked=sqp, result=searchResults)
         await websocket.send_json(sqr.json(), mode="text")
-
-
-@router.get("/search/show", response_model=SearchQueryResponse)
-async def search_by(searchParams: SearchQueryParams = Depends(), db: Session = Depends(get_db)):
-    """
-    주식 이름으로 결과가 여러개 나오고, 상품 목록처럼 보여줄 때
-    최근 영업일 7일 동안 주식 가격 보여주는 용도
-    주식이름 정확하게 입력 안하고 "삼성" 이렇게 검색했을 때 나오는거
-    """
-    queryy = f"""
-    SELECT 
-        RD7.TRADE_DATE, 
-        RD7.ISU_CODE,
-        SearchName.ISU_CODE_KR,
-        SearchName.ISU_NAME, 
-        SearchName.ISU_NAME_SHORT, 
-        SearchName.MARKET_TYPE_NAME, 
-        SearchName.STATE_CODE,
-        RD7.CLOSE_PRICE,
-        RD7.COMPARED_PREV_RATE,
-        RD7.TRADE_VOLUME,
-        RD7.TRADE_VALUE,
-        RD7.MARKET_CAP,
-        RD7.LISTED_SHARES
-    FROM 
-        finance.Recent_Days_7 as RD7
-    INNER JOIN
-        (	SELECT ISU_CODE, ISU_CODE_KR,ISU_NAME, ISU_NAME_SHORT, MARKET_TYPE_NAME, STATE_CODE
-            FROM finance.Stock_Info
-            WHERE 
-                ISU_NAME LIKE '%{searchParams.keyword}%' OR 
-                ISU_NAME_SHORT LIKE '%{searchParams.keyword}%') 
-        as SearchName
-        ON RD7.ISU_CODE = SearchName.ISU_CODE
-    """
-    searchResults = db.execute(queryy).fetchall()
-    searchResults = [SearchQueryResult(**x) for x in searchResults]
-    return SearchQueryResponse(asked=searchParams, result=searchResults)
 
 
 @router.get("/stat", response_model=Union[SearchQueryResponse, Any])
@@ -177,13 +151,11 @@ async def search_by(searchParams: SearchStatParams = Body(), db: Session = Depen
     return searchResults
 
 
-@router.get("/stock/{CODE}")
-async def get_stock(db: Session = Depends(get_db)):
-    return {"stock": 123}
-    try:
-        result = db.execute(sql_search)
-    except Exception as e:
-        print(e)
-        return 500
-    else:
-        return result.fetchall()
+def optimize_searching(keyword: str) -> str:
+    if only_KOR_chosung(keyword):
+        return f"ISU_NAME_SHORT_INITIAL LIKE '%{keyword}%'"
+    if only_KOR_char(keyword):
+        return f"ISU_NAME LIKE '%{keyword}%' or ISU_NAME_SHORT LIKE '%{keyword}%'"
+    if only_NUM(keyword) or is_ISU_CODE(keyword):
+        return f"ISU_CODE_KR LIKE '%{keyword}%' or ISU_CODE LIKE '%{keyword}%'"
+    return
