@@ -7,9 +7,13 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from datetime import timezone, timedelta
 from functools import partial
-from routers.stock import by_name, by_stat
-from routers.stock import general
-from routers.user import login, register, update
+from routers.stock import stockRouter
+from routers.login_register import loginRegisterRouter
+from routers.board import boardRouter
+from routers.images import imageRouter
+from routers.user import userRouter
+
+# from routers.user
 from middlewares.token_validator import access_control
 
 logger = logging.getLogger(__name__)
@@ -17,12 +21,11 @@ logger = logging.getLogger(__name__)
 
 def build_app():
     app = FastAPI()
-    app.include_router(by_name.router)
-    app.include_router(by_stat.router)
-    app.include_router(general.router)
-    app.include_router(login.router)
-    app.include_router(register.router)
-    app.include_router(update.router)
+    app.include_router(stockRouter)
+    app.include_router(loginRegisterRouter)
+    app.include_router(boardRouter)
+    app.include_router(imageRouter)
+    app.include_router(userRouter)
 
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.middleware.cors import CORSMiddleware
