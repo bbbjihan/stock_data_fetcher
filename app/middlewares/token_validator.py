@@ -1,39 +1,39 @@
-import base64
-import hmac
 import time
-import typing
 import re
-
 import jwt
-import sqlalchemy.exc
-
 from jwt.exceptions import ExpiredSignatureError, DecodeError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.datastructures import Headers
 from pprint import pprint
 from fastapi import APIRouter, Depends, status, Query, WebSocket, Body
-
 from sqlalchemy.orm import Session
-from urllib import parse
-from pprint import pprint
 from routers.dep import get_db
 from typing import Optional, List, Union, Any
 from pydantic import BaseModel, PositiveInt
-from enum import Enum
-from datetime import datetime, timedelta
 from typing import Union
-
-from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from utils.date_utils import D
+import exceptions.auth as EAuth
+from exceptions.handler import AuthExceptionHandler
+from fastapi.logger import logger
+
+"""
+    여기 있는 validator는 로그인을 하고나서 사용할 수 있는 API 엔드포인트를 가기전에
+    1) 헤더에 토큰이 있는지 확인
+    2) 토큰이 유효한지 확인
+    3) expire이 안되었는지 확인
+    4) 조작된 것이 아닌지 확인
+    이런 역할들을 가지고 있다.
+    
+    뒤에 있는 엔드포인트들이 토큰 해싱하고, 확인하고 이런거 안하게끔 ㅇㅇ
+"""
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
@@ -55,21 +55,30 @@ class UserToken(BaseModel):
     # disabled: Union[bool, None] = None
 
 
-# class UserInDB(User):
-#     hashed_password: str
-
-
 SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 200
-credentials_exception = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Could not validate credentials",
-    headers={"WWW-Authenticate": "Bearer"},
-)
+
+
+def is_endpoint_to_cascade(url: str):
+
+    if url == "/docs":
+        return False
+
+    nos = ["/login", "/register"]
+    if any([url.startswith(x) for x in nos]):
+        return True
+
+    return False
 
 
 async def access_control(request: Request, call_next):
+
+    url = request.url.path
+
+    if not is_endpoint_to_cascade(url):
+        return await call_next(request)
+
     request.state.req_time = D.datetime()
     request.state.start = time.time()
     request.state.inspect = None
@@ -85,33 +94,21 @@ async def access_control(request: Request, call_next):
     headers = request.headers
     cookies = request.cookies
 
-    url = request.url.path
-
-    print(f"{url=}")
-
     try:
-        print(2)
         if url.startswith("/login/users/me/"):
-            print(3)
             if not auth_exists(request.headers):
-                return "no auth"
-            print(4)
+                raise EAuth.CredentialsException
             if token_ := request.headers.get("authorization") or request.headers.get(
                 "Authorization"
             ):
-                print(5)
                 payload = token_decode(token_)
                 username = payload.get("sub", None)
                 if username is None:
-                    raise credentials_exception
-                # token_data -> UserData
+                    # 토큰 안에 sub 이 없을 경우
+                    raise EAuth.CredentialsException
                 token_data = TokenData(username=username)
 
                 session = next(get_db())  # NOTE:DB 연결해서 사용자 정보 가져오기
-                # print(f"{request.state._state=}")
-
-                # request.state.user에 사용자 식별 정보 넘기기
-                # request.state.user = UserInDB
                 query = f"""
                 SELECT USER_NAME, EMAIL, FIRST_NAME, LAST_NAME, USER_CONTROL_ID
                 FROM finance.`User`
@@ -119,8 +116,9 @@ async def access_control(request: Request, call_next):
                 """
                 result = session.execute(query)
                 row = result.fetchone()
+                session.close()
                 if not row:
-                    return False
+                    raise EAuth.UserNotFound
                 USER_NAME, EMAIL, FIRST_NAME, LAST_NAME, USER_CONTROL_ID = row
                 request.state.user = UserToken(
                     username=USER_NAME,
@@ -129,31 +127,26 @@ async def access_control(request: Request, call_next):
                     last_name=LAST_NAME,
                     user_control_id=USER_CONTROL_ID,
                 )
-                # NOTE: 정보 가져왔으면 session.close() 하기
-                session.close()
-                # print("asdasdasdadsas")
             else:
-                raise credentials_exception
-            print(10)
+                raise EAuth.CredentialsException
             response = await call_next(request)
             return response
         elif 1:
-            print(f"{url=}")
             response = await call_next(request)
             return response
+    except EAuth.CredentialsException as error:
+        error_dict = dict(detail=error.detail)
+        response = JSONResponse(status_code=error.status_code, content=error_dict)
+    except EAuth.TokenExceptions as error:
+        error_dict = dict(detail=error.detail)
+        response = JSONResponse(status_code=error.status_code, content=error.dict)
     except Exception as e:
-        print(e)
         # Exception 처리하지 못한거 여기서 처리
-        # error = await exception_handler(e)
-        # error_dict = dict(status=error.status_code, msg=error.msg, detail=error.detail, code=error.code)
-        # response = JSONResponse(status_code=error.status_code, content=error_dict)
-        # await api_logger(request=request, error=error)
-        pass
-    print(123)
-    # return response
+        print(e)
+    return response
 
 
-async def url_pattern_check(path, pattern):
+def url_pattern_check(path, pattern):
     result = re.match(pattern, path)
     if result:
         return True
@@ -179,15 +172,12 @@ def token_style_valid(token: str) -> bool:
 def token_decode(access_token: str) -> dict:
 
     if not token_style_valid(access_token):
-        return False
-
+        raise EAuth.TokenMalformed
     try:
         _, access_token = access_token.split()
         payload = jwt.decode(access_token, key=SECRET_KEY, algorithms=[ALGORITHM])
     except ExpiredSignatureError:
-        raise credentials_exception
-        # raise ex.TokenExpiredEx()
+        raise EAuth.TokenExpired
     except DecodeError:
-        raise credentials_exception
-        # raise ex.TokenDecodeEx()
+        raise EAuth.TokenDecodeFailed
     return payload
