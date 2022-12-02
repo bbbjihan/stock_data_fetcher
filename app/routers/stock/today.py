@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends
-from api import deps
 from sqlalchemy.orm import Session
 from urllib import parse
 from pprint import pprint
@@ -13,14 +12,12 @@ from typing import Optional
 
 
 @router.get(path="/today", description="코스피, 코스닥, 코넥스 주식 가져오는거")
-async def get_market(db: Session = Depends(deps.get_db), market: str = "KOSPI", limit:int =50):
-
+# async def get_market(db: Session = Depends(deps.get_db), market: str = "KOSPI", limit: int = 50):
+async def get_market():
     search_word = parse.unquote(search_word)
     print(search_word)
     # return 200
     queryy = f"""
-    KR7219750007
-    
     SELECT ISU_CODE, ISU_NAME, ISU_NAME_SHORT
     FROM finance.Stock_Info
     WHERE TRADE_DATE='2022-11-22' AND (
@@ -45,7 +42,8 @@ async def get_market(db: Session = Depends(deps.get_db), market: str = "KOSPI", 
 
 
 @router.get("/stock/{CODE}")
-async def get_stock(db: Session = Depends(deps.get_db)):
+# async def get_stock(db: Session = Depends(deps.get_db)):
+async def get_stock():
     return {"stock": 123}
     try:
         result = db.execute(sql_search)

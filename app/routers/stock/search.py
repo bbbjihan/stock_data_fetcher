@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, status, Query, WebSocket
+from fastapi import APIRouter, Depends, status, Query, WebSocket, Body
 
 from sqlalchemy.orm import Session
 from urllib import parse
 from pprint import pprint
 from routers.dep import get_db
-from typing import Optional, List
-from pydantic import BaseModel, NonNegativeInt
+from typing import Optional, List, Union, Any
+from pydantic import BaseModel, NonNegativeInt, PositiveInt
 
 __all__ = ["router", "websocket_endpoint"]
 
@@ -42,6 +42,26 @@ class SearchQueryResult(BaseModel):
 class SearchQueryResponse(BaseModel):
     asked: SearchQueryParams
     result: Optional[List[SearchQueryResult]]
+
+
+class SearchStatParams(BaseModel):
+    rise_in_row: Optional[PositiveInt]
+    fall_in_row: Optional[PositiveInt]
+    price_over: Optional[PositiveInt]
+    price_under: Optional[PositiveInt]
+    market_type: Optional[MARKET_TYPE]
+    stock_type_name: Optional[str]
+    market_cap_over: Optional[PositiveInt]
+    market_cap_under: Optional[PositiveInt]
+    trade_volume_over: Optional[PositiveInt]
+    trade_volume_under: Optional[PositiveInt]
+    trade_value_over: Optional[PositiveInt]
+    trade_value_under: Optional[PositiveInt]
+    fluc_rate_over: Optional[float]
+    fluc_rate_under: Optional[float]
+    fluc_price_over: Optional[PositiveInt]
+    fluc_price_under: Optional[PositiveInt]
+    days: Optional[PositiveInt]
 
 
 @router.get("/name", response_model=SearchQueryResponse)
@@ -125,6 +145,36 @@ async def search_by(searchParams: SearchQueryParams = Depends(), db: Session = D
     searchResults = db.execute(queryy).fetchall()
     searchResults = [SearchQueryResult(**x) for x in searchResults]
     return SearchQueryResponse(asked=searchParams, result=searchResults)
+
+
+@router.get("/stat", response_model=Union[SearchQueryResponse, Any])
+async def search_by(searchParams: SearchStatParams = Body(), db: Session = Depends(get_db)):
+    """
+    주식 이름 검색하는 API
+    1. 주식 코드 ISU_CODE, ISU_CODE_KR 으로 검색하는 조건
+    2. 주식 전체 이름, 축약 이름(일반적으로 부르는거) ISU_NAME, ISU_NAME_SHORT 으로 검색하는 조건
+    """
+    print(searchParams)
+
+    queryy = f"""
+    SELECT DISTINCT RD7.ISU_CODE
+    FROM finance.Recent_Days_7 as RD7
+    INNER JOIN (
+        SELECT cnt.ISU_CODE 
+        FROM (
+            SELECT 
+                RD7_.ISU_CODE,
+                COUNT(RD7_.COMPARED_PREV_RATE) as rise_in_day_7
+            FROM 
+                finance.Recent_Days_7 as RD7_
+            WHERE
+                RD7_.COMPARED_PREV_RATE >= 0
+            GROUP BY RD7_.ISU_CODE) as cnt
+        WHERE rise_in_day_7 =7) rise_7
+    ON RD7.ISU_CODE = rise_7.ISU_CODE
+    """
+    searchResults = db.execute(queryy).fetchall()
+    return searchResults
 
 
 @router.get("/stock/{CODE}")
