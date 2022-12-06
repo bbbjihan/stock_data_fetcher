@@ -239,7 +239,7 @@ class SingelSiseClass(KRX_data_interface):
         )
 
         insert_query = """
-        INSERT INTO Stock_Day_Summary(
+        INSERT INGNORE INTO Stock_Day_Summary(
             ISU_CODE,
             TRADE_DATE,
             CLOSE_PRICE,
@@ -309,9 +309,9 @@ class SingelSiseClass(KRX_data_interface):
         date_ = get_today()
         date_ = date(2022, 11, 22)
 
-        from_ = date(2015, 1, 1)
+        from_ = date(2015, 11, 23)
         # from_ = date(2022, 10, 22)
-        to_ = date(2022, 11, 22)
+        to_ = date(2022, 11, 23)
 
         # return
         for market, market_name in [

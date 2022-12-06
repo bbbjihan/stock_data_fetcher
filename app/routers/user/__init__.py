@@ -6,7 +6,7 @@ from routers.user import update
 
 
 def make_router():
-    router = APIRouter(prefix="/user", tags=["user stuffs"])
+    router = APIRouter(prefix="/user", tags=["user stuffs 사용자 관련 정보"])
     router.include_router(info.router)
     return router
 

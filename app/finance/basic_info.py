@@ -170,6 +170,39 @@ class BasicInfoClass(KRX_data_interface):
         print("run 2")
         return 123
 
+        return
+
+    # 초성 리스트. 00 ~ 18
+    def make_initial(self, name: str) -> str:
+        CHOSUNG_LIST = [
+            "ㄱ",
+            "ㄲ",
+            "ㄴ",
+            "ㄷ",
+            "ㄸ",
+            "ㄹ",
+            "ㅁ",
+            "ㅂ",
+            "ㅃ",
+            "ㅅ",
+            "ㅆ",
+            "ㅇ",
+            "ㅈ",
+            "ㅉ",
+            "ㅊ",
+            "ㅋ",
+            "ㅌ",
+            "ㅍ",
+            "ㅎ",
+        ]
+        chosung = []
+        name = name.replace(" ", "")
+        for w in list(name.strip()):
+            if "가" <= w <= "힣":
+                ch1 = (ord(w) - ord("가")) // 588
+                chosung.append(CHOSUNG_LIST[ch1])
+        return chosung
+
     def trim_data(self, json_) -> List:
         items_ = []
 
@@ -205,6 +238,8 @@ class BasicInfoClass(KRX_data_interface):
             item_ = [item_raw[k] for k, v in keys.items()]
             item_.append(f"summary of {item_raw['ISU_ABBRV']}")
             item_.append(1)
+            # ISU_NAME_SHORT_INITIAL
+            item_.append(self.make_initial(item_raw["ISU_ABBRV"]))
             items_.append(item_)
         return items_
 
@@ -231,7 +266,9 @@ class BasicInfoClass(KRX_data_interface):
             SECTOR_TYPE_NAME,
             KIND_STKCERT_TYPE_NAME, 
             SUMMARY, 
-            STATE_CODE) VALUES (%s, %s,%s, %s,%s, %s,%s, %s,%s, %s,%s, %s)
+            STATE_CODE,
+            ISU_NAME_INITIAL,
+            ISU_NAME_SHORT_INITIAL) VALUES (%s, %s,%s, %s,%s, %s,%s, %s,%s, %s,%s, %s)
         """
         # async with conn.cursor() as curr:
         #     await curr.executemany(insert_query, data_)

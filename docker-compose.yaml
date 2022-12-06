@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+
+  db-mysql:
+    container_name: finance_db
+    image: mysql:latest
+    restart: always
+    environment: 
+      MYSQL_ROOT_PASSWORD: "mysql-db"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+    ports:
+      - "3309:3306"
+    networks:
+      - finance_data_network
+
+  # tusu:
+  #   build: 
+  #     context: ./tusu
+  #     dockerfile: Dockerfile
+  #   depends_on:
+  #     db_api_server:
+  #       condition: service_healthy
+  #   networks:
+  #     - tusu_network
+    
+
+# volumes:
+#   tusu_db:
+#     external: true
+
+networks:
+  finance_data_network:
+    driver: bridge

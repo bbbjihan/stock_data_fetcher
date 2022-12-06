@@ -30,6 +30,8 @@ from pprint import pprint
 from abstractClass import KRX_data_interface
 import asyncmy
 
+TLQKF = [("KR7300720000", date(2018, 8, 6)), ("KR7306200007", date(2018, 10, 5))]
+
 
 class SingelBuyerClass(KRX_data_interface):
     "TRD_DD"
@@ -226,7 +228,7 @@ class SingelBuyerClass(KRX_data_interface):
         )
 
         insert_query = """
-        INSERT INTO Stock_Day_Buyers(
+        INSERT IGNORE INTO Stock_Day_Buyers(
             TRADE_DATE,
             ISU_CODE,
             INVEST_TYPE,
@@ -268,9 +270,126 @@ class SingelBuyerClass(KRX_data_interface):
             db="finance",
             autocommit=True,
         )
+
+        ### 9개, 각각 평균 16시간
         Q_query = f"""
-        SELECT ISU_CODE, LISTED_DATE FROM Stock_Info
-        WHERE MARKET_TYPE_NAME = "{market}"
+        SELECT ISU_CODE, LISTED_DATE
+        FROM 
+            finance.Stock_Info
+        where 
+            market_type_name ="KOSPI" AND
+            listed_date >='2019-1-1'
+        """  # 74개
+
+        Q_query_ok = f"""
+        SELECT ISU_CODE, LISTED_DATE
+        FROM 
+            finance.Stock_Info
+        where 
+            market_type_name ="KOSPI" AND
+            listed_date >='2012-1-1' AND
+            listed_date < '2019-1-1'
+        """  # 115개
+
+        Q_query_ok = f"""
+        SELECT ISU_CODE, LISTED_DATE
+        FROM 
+            finance.Stock_Info
+        where 
+            market_type_name ="KOSPI" AND
+            listed_date >= '2007-1-1' AND
+            listed_date < '2012-1-1'
+        """  # 113개
+        Q_query_ok = f"""
+        SELECT ISU_CODE, LISTED_DATE
+        FROM 
+            finance.Stock_Info
+        where 
+            market_type_name ="KOSPI" AND
+            listed_date >= '2000-1-1' AND
+            listed_date < '2007-1-1'
+        """  # 111개
+        Q_query_ok = f"""
+        SELECT ISU_CODE, LISTED_DATE
+        FROM 
+            finance.Stock_Info
+        where 
+            market_type_name ="KOSPI" AND
+            listed_date >= '1992-1-1' AND
+            listed_date <= '2000-1-1'
+        """  # 119개
+
+        Q_query_ok = f"""
+        SELECT ISU_CODE, LISTED_DATE
+        FROM 
+            finance.Stock_Info
+        where 
+            market_type_name ="KOSPI" AND
+            listed_date >= '1989-6-1' AND
+            listed_date < '1992-1-1' 
+        """  # 118개
+
+        Q_query_ok = f"""
+        SELECT ISU_CODE, LISTED_DATE
+        FROM 
+            finance.Stock_Info
+        where 
+            market_type_name ="KOSPI" AND
+            listed_date >= '1987-1-1'  AND
+            listed_date < '1989-6-1' 
+        """  # 95개
+
+        Q_query_ok = f"""
+        SELECT ISU_CODE, LISTED_DATE
+        FROM 
+            finance.Stock_Info
+        where 
+            market_type_name ="KOSPI" AND
+            listed_date >= '1976-1-1' AND
+            listed_date < '1987-1-1'  
+        """  # 106개
+
+        Q_query_ok = f"""
+        SELECT ISU_CODE, LISTED_DATE
+        FROM 
+            finance.Stock_Info
+        where 
+            market_type_name ="KOSPI" AND
+            listed_date < '1976-1-1'
+        """  # 90개
+
+        try:
+            async with conn.cursor() as curr:
+                await curr.execute(Q_query)
+                result = await curr.fetchall()
+        except Exception as e:
+            pprint(Q_query)
+            print(e)
+            exit()
+        finally:
+            conn.close()
+        from itertools import chain
+
+        result = [x for x in chain(result)]
+        # print(result)
+        # exit()
+        # pprint(result)
+        return result
+
+    async def get_open_day(self):
+
+        conn = await asyncmy.connect(
+            host="127.0.0.1",
+            port=3309,
+            user="root",
+            password="mysql-db",
+            db="finance",
+            autocommit=True,
+        )
+
+        Q_query = f"""
+        SELECT TRADE_DATE FROM finance.Stock_Day_Summary
+        WHERE ISU_CODE="HK0000057197"
         """
         try:
             async with conn.cursor() as curr:
@@ -284,7 +403,7 @@ class SingelBuyerClass(KRX_data_interface):
             conn.close()
         from itertools import chain
 
-        result = [x for x in chain(result)]
+        result = [x[0] for x in chain(result)]
         # pprint(result)
         return result
 
@@ -300,23 +419,38 @@ class SingelBuyerClass(KRX_data_interface):
         #     (MARKETS.KOSDAQ, "KOSDAQ"),
         #     (MARKETS.KONEX, "KONEX"),
         # ]:
+
+        open_days = await self.get_open_day()
+        open_days_num = len(open_days)
         for market, market_name in [
-            (MARKETS.KOSPI, "KOSPI"),
+            (MARKETS.KOSDAQ, "KOSDAQ"),
         ]:
-            for isu_code, listed_date in await self.get_isu(market_name):
-                from_I = listed_date if from_ < listed_date else from_
-                for at_day in get_weekday(from_=from_I, to_=to_):
-                    print(f"searching {isu_code} at {market_name} | {at_day}")
+            num = 1942
+
+            isus = await self.get_isu(market_name)
+            search_isu_num = len(isus)
+            for i, (isu_code, listed_date) in enumerate(TLQKF, start=1):
+
+                # for isu_code in TLQKF:
+                # from_I = listed_date if from_ < listed_date else from_
+                from_I = listed_date
+                for ii, at_day in enumerate(get_weekday(from_=from_I, to_=to_)):
+                    if at_day not in open_days:
+                        continue
+
+                    print(
+                        f"({i}/{search_isu_num}) searching {isu_code} at {market_name} | {at_day} ... {ii}/{open_days_num}"
+                    )
                     raw_data = await self.get_data(ISU_CD=isu_code, at_day=at_day)
 
                     if raw_data is None:
-                        await asyncio.sleep(0.6)
+                        await asyncio.sleep(0.12)
                         continue
                     data_ = self.trim_data(raw_data, at_day, isu_code)
                     # pprint(data_)
                     # return
                     await self.insert_data(data_=data_)
-                    await asyncio.sleep(1.2)
+                    await asyncio.sleep(0.12)
                     # return
 
 
@@ -326,6 +460,7 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     ssc = SingelBuyerClass()
 
+    # loop.run_until_complete(ssc.get_open_day())
     loop.run_until_complete(ssc.run_routine())
     # loop.run_until_complete(ssc.get_isu())
     # loop.run_until_complete(

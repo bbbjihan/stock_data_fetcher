@@ -1,5 +1,5 @@
 import logging
-from fastapi import FastAPI, WebSocket, middleware
+from fastapi import FastAPI, WebSocket, middleware, Request
 from fastapi_utils.tasks import repeat_every
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -13,10 +13,11 @@ from routers.board import boardRouter
 from routers.images import imageRouter
 from routers.user import userRouter
 
-# from routers.user
 from middlewares.token_validator import access_control
 
 logger = logging.getLogger(__name__)
+
+origins = ["*"]
 
 
 def build_app():
@@ -30,6 +31,13 @@ def build_app():
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.middleware.cors import CORSMiddleware
 
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.add_middleware(middleware_class=BaseHTTPMiddleware, dispatch=access_control)
     return app
 
@@ -37,17 +45,9 @@ def build_app():
 app = build_app()
 
 
-@app.get("/test")
-async def test():
-    return 200
-
-
-# @app.websocket("/ws")
-# async def websocket_temp(websocket: WebSocket):
-#     await websocket.accept()
-#     while True:
-#         data = await websocket.receive_text()
-#         await websocket.send_text(f"Message text was: {data}")
+@app.get(path="/ping", tags=["test"])
+async def ping(request: Request):
+    return "pong"
 
 
 """
@@ -99,6 +99,6 @@ async def startup():
     pass
 
 
-@app.get("/")
-def hello():
-    return "Hello"
+@app.get("")
+async def hello():
+    return "go to /docs"
